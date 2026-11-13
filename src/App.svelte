@@ -11,7 +11,8 @@
   let winnerIndex = $state(null)
   // Effet « wobble » façon démo : chaque ligne horizontale de la roue est décalée
   // selon une sinusoïde qui défile verticalement (filtre SVG de déplacement).
-  const WOBBLE_CHANCE = 0.2 // probabilité de l'effet à chaque lancer
+  const WOBBLE_CHANCE = 1 / 5 // déformation de la roue
+  const RINGS_CHANCE = 2 / 5 // anneaux ondulés ; le reste du temps, aucune ondulation
   const WOBBLE_PERIOD = 46 // hauteur d'une ondulation, en unités du viewBox
   const WOBBLE_MAX = 16 // décalage crête à crête à pleine vitesse
   const WOBBLE_SCROLL = 55 // défilement vertical, unités/s
@@ -104,10 +105,12 @@
     const start = performance.now()
     let lastSlice = Math.floor(from / slice)
     whoosh()
-    // Une fois sur cinq : wobble de la roue (filtre SVG) ; sinon anneaux ondulés (PixiJS).
+    // 1 fois sur 5 : wobble de la roue (filtre SVG) ; 2 fois sur 5 : anneaux ondulés (PixiJS) ;
+    // 2 fois sur 5 : aucune ondulation.
+    const roll = Math.random()
     wobbling =
-      Math.random() < WOBBLE_CHANCE && !!wobbleMap && !matchMedia('(prefers-reduced-motion: reduce)').matches
-    effects?.spinStart({ rings: !wobbling })
+      roll < WOBBLE_CHANCE && !!wobbleMap && !matchMedia('(prefers-reduced-motion: reduce)').matches
+    effects?.spinStart({ rings: roll >= WOBBLE_CHANCE && roll < WOBBLE_CHANCE + RINGS_CHANCE })
 
     const frame = (now) => {
       const t = (now - start) / 1000
