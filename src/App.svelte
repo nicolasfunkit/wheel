@@ -1,15 +1,39 @@
 <script>
+  import { onMount } from 'svelte'
   import Effects from './Effects.svelte'
+  import { MAX_SPEED, indexAtPointer, randomSpin, speedAt, travelAt } from './spin.js'
 
   const R = 96 // rayon de la roue dans le viewBox (-100..100)
-  const MAX_SPEED = 1600 // deg/s
-  const FRICTION = 0.9 // décroissance exponentielle de la vitesse (1/s)
-  const MIN_SPEED = 3 // deg/s : en dessous, la roue est considérée arrêtée
-
   let text = $state('Alice\nBob\nChloé\nDavid\nEmma\nFarid\nGaëlle\nHugo')
   let rotation = $state(0) // degrés, sens horaire
   let spinning = $state(false)
   let winnerIndex = $state(null)
+  // Effet « wobble » façon démo : chaque ligne horizontale de la roue est décalée
+  // selon une sinusoïde qui défile verticalement (filtre SVG de déplacement).
+  const WOBBLE_CHANCE = 0.2 // probabilité de l'effet à chaque lancer
+  const WOBBLE_PERIOD = 46 // hauteur d'une ondulation, en unités du viewBox
+  const WOBBLE_MAX = 16 // décalage crête à crête à pleine vitesse
+  const WOBBLE_SCROLL = 55 // défilement vertical, unités/s
+  let wobbleMap = $state('') // image de déplacement : rouge = sinusoïde verticale
+  let wobbling = $state(false)
+  let wobbleAmp = $state(0)
+  let wobbleShift = $state(0)
+
+  onMount(() => {
+    const size = 64
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = size
+    const ctx = canvas.getContext('2d')
+    for (let y = 0; y < size; y++) {
+      const red = Math.round(127.5 + 127.5 * Math.sin((y / size) * Math.PI * 2))
+      ctx.fillStyle = `rgb(${red} 128 128)`
+      ctx.fillRect(0, y, 1, 1)
+    }
+    wobbleMap = canvas.toDataURL()
+  })
+
+  let force = $state(null) // force du dernier lancer, entre 0 et 1
   let effects
   let rim = $state()
 
@@ -33,12 +57,6 @@
   const color = (i) => `hsl(${Math.round((i * 360) / names.length)} 75% ${i % 2 ? 52 : 60}%)`
   const label = (name) => (name.length > 18 ? name.slice(0, 17) + '…' : name)
 
-  // Index du segment sous le pointeur (fixe, en haut).
-  const indexAtPointer = () => {
-    const local = (360 - (rotation % 360)) % 360
-    return Math.floor(local / slice) % names.length
-  }
-
   // Mélange de Fisher-Yates sur les prénoms (les lignes vides sont retirées).
   function shuffle() {
     const list = [...names]
@@ -50,29 +68,43 @@
     winnerIndex = null
   }
 
+  function reset() {
+    rotation = 0
+    winnerIndex = null
+    force = null
+  }
+
   function spin() {
     if (spinning || names.length === 0) return
     spinning = true
     winnerIndex = null
 
-    let speed = 700 + Math.random() * (MAX_SPEED - 700) // deg/s, vitesse initiale aléatoire
-    let last = performance.now()
-    effects?.spinStart()
+    const current = randomSpin()
+    force = current.force
+    const from = rotation % 360
+    const start = performance.now()
+    // Une fois sur cinq : wobble de la roue (filtre SVG) ; sinon anneaux ondulés (PixiJS).
+    wobbling =
+      Math.random() < WOBBLE_CHANCE && !!wobbleMap && !matchMedia('(prefers-reduced-motion: reduce)').matches
+    effects?.spinStart({ rings: !wobbling })
 
     const frame = (now) => {
-      const dt = Math.min((now - last) / 1000, 0.05)
-      last = now
-      rotation += speed * dt
-      speed *= Math.exp(-FRICTION * dt)
-      effects?.spinSpeed(speed / MAX_SPEED)
+      const t = (now - start) / 1000
+      rotation = from + travelAt(current, t)
+      const intensity = speedAt(current, t) / MAX_SPEED
+      effects?.spinSpeed(intensity)
+      // racine carrée : l'ondulation reste visible plus longtemps pendant le ralentissement
+      wobbleAmp = WOBBLE_MAX * Math.sqrt(intensity) * Math.min(1, t / 0.5)
+      wobbleShift = (t * WOBBLE_SCROLL) % WOBBLE_PERIOD
 
-      if (speed > MIN_SPEED && names.length > 0) {
+      if (t < current.duration) {
         requestAnimationFrame(frame)
       } else {
         spinning = false
+        wobbling = false
         effects?.spinEnd()
         if (names.length) {
-          winnerIndex = indexAtPointer()
+          winnerIndex = indexAtPointer(rotation, names.length)
           effects?.celebrate()
         }
       }
@@ -84,6 +116,36 @@
 <main>
   <section class="stage">
     <svg viewBox="-104 -108 208 212" role="img" aria-label="Picker wheel">
+      <defs>
+        <filter
+          id="wobble"
+          filterUnits="userSpaceOnUse"
+          x="-116"
+          y="-116"
+          width="232"
+          height="232"
+          color-interpolation-filters="sRGB"
+        >
+          <feImage
+            href={wobbleMap}
+            x="-116"
+            y={-116 + wobbleShift}
+            width="232"
+            height={WOBBLE_PERIOD}
+            preserveAspectRatio="none"
+            result="stripe"
+          />
+          <feTile in="stripe" result="map" />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="map"
+            scale={wobbleAmp}
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
+      </defs>
+      <g filter={wobbling ? 'url(#wobble)' : undefined}>
       <g transform="rotate({rotation})">
         {#if names.length === 0}
           <circle r={R} fill="#2a2f3a" />
@@ -114,6 +176,7 @@
       </g>
       <circle bind:this={rim} r={R} fill="none" stroke="#f5f5f5" stroke-width="1.5" />
       <circle r="7" fill="#f5f5f5" />
+      </g>
       <path d="M-6,-107 L6,-107 L0,-92 Z" fill="#f5f5f5" stroke="#11141a" stroke-width="0.6" />
     </svg>
     <Effects bind:this={effects} target={rim} />
@@ -124,6 +187,9 @@
       <label for="names">Participants <span>({names.length})</span></label>
       <button class="tool" onclick={shuffle} disabled={spinning || names.length < 2}>
         🔀 Shuffle
+      </button>
+      <button class="tool" onclick={reset} disabled={spinning || (rotation === 0 && winnerIndex === null)}>
+        ↺ Reset
       </button>
     </div>
     <textarea
@@ -137,6 +203,11 @@
     <button onclick={spin} disabled={spinning || names.length === 0}>
       {spinning ? 'Spinning…' : 'Spin the wheel'}
     </button>
+    <div class="force" class:idle={force === null}>
+      <span>Launch force</span>
+      <div class="gauge"><div style:width="{(force ?? 0) * 100}%"></div></div>
+      <span class="value">{force === null ? '–' : Math.round(force * 100) + '%'}</span>
+    </div>
     <p class="result" aria-live="polite">
       {#if winner}🎉 <strong>{winner}</strong>{/if}
     </p>
@@ -153,7 +224,7 @@
 
   main {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 1fr 340px;
     height: 100vh;
   }
 
@@ -167,6 +238,7 @@
   }
 
   svg {
+    overflow: visible;
     width: 100%;
     height: 100%;
     max-height: calc(100vh - 32px);
@@ -199,10 +271,12 @@
 
   .toolbar label {
     flex: 1;
+    white-space: nowrap;
   }
 
   button.tool {
-    padding: 6px 10px;
+    padding: 6px 8px;
+    white-space: nowrap;
     border: 1px solid #343a48;
     background: transparent;
     color: inherit;
@@ -250,6 +324,39 @@
   button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .force {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+  }
+
+  .force.idle {
+    opacity: 0.5;
+  }
+
+  .gauge {
+    flex: 1;
+    height: 8px;
+    border-radius: 4px;
+    background: #11141a;
+    overflow: hidden;
+  }
+
+  .gauge div {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #4cc9f0, #ffb703, #ef476f);
+    background-size: 276px 100%;
+    transition: width 0.3s ease-out;
+  }
+
+  .force .value {
+    min-width: 3ch;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
   .result {

@@ -17,6 +17,7 @@
   let waveAcc = 0
   let emitAcc = 0
   let rings = []
+  let ringsEnabled = true
   let app = null
   let glow = null
   let particles = []
@@ -133,7 +134,7 @@
   // Ondes : anneaux ondulés qui partent du centre de la roue et s'élargissent.
   function updateRings(dt) {
     waveAcc += dt * (1 + 3 * intensity)
-    if (spinEffect && waveAcc >= 1) {
+    if (spinEffect && ringsEnabled && waveAcc >= 1) {
       waveAcc -= 1
       spawnRing()
     }
@@ -235,7 +236,8 @@
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
   // À appeler au lancement de la roue : tire un effet au hasard.
-  export function spinStart() {
+  export function spinStart({ rings: withRings = true } = {}) {
+    ringsEnabled = withRings
     if (!app || !target || reducedMotion()) return
     const a = target.getBoundingClientRect()
     const b = host.getBoundingClientRect()
