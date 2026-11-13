@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import Effects from './Effects.svelte'
+  import { setMuted, tada, tick, whoosh } from './sound.js'
   import { MAX_SPEED, indexAtPointer, randomSpin, speedAt, travelAt } from './spin.js'
 
   const R = 96 // rayon de la roue dans le viewBox (-100..100)
@@ -32,6 +33,24 @@
     }
     wobbleMap = canvas.toDataURL()
   })
+
+  function initialMuted() {
+    try {
+      return localStorage.getItem('muted') === '1'
+    } catch {
+      return false
+    }
+  }
+  let muted = $state(initialMuted())
+  setMuted(initialMuted())
+
+  function toggleMuted() {
+    muted = !muted
+    setMuted(muted)
+    try {
+      localStorage.setItem('muted', muted ? '1' : '0')
+    } catch {}
+  }
 
   let force = $state(null) // force du dernier lancer, entre 0 et 1
   let effects
@@ -83,6 +102,8 @@
     force = current.force
     const from = rotation % 360
     const start = performance.now()
+    let lastSlice = Math.floor(from / slice)
+    whoosh()
     // Une fois sur cinq : wobble de la roue (filtre SVG) ; sinon anneaux ondulés (PixiJS).
     wobbling =
       Math.random() < WOBBLE_CHANCE && !!wobbleMap && !matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -91,6 +112,13 @@
     const frame = (now) => {
       const t = (now - start) / 1000
       rotation = from + travelAt(current, t)
+      // Un « clac » à chaque séparation de segments qui passe sous le pointeur.
+      const currentSlice = Math.floor(rotation / slice)
+      if (currentSlice !== lastSlice) {
+        lastSlice = currentSlice
+        if (names.length > 1) tick()
+      }
+
       const intensity = speedAt(current, t) / MAX_SPEED
       effects?.spinSpeed(intensity)
       // racine carrée : l'ondulation reste visible plus longtemps pendant le ralentissement
@@ -106,6 +134,7 @@
         if (names.length) {
           winnerIndex = indexAtPointer(rotation, names.length)
           effects?.celebrate()
+          tada()
         }
       }
     }
@@ -180,6 +209,18 @@
       <path d="M-6,-107 L6,-107 L0,-92 Z" fill="#f5f5f5" stroke="#11141a" stroke-width="0.6" />
     </svg>
     <Effects bind:this={effects} target={rim} />
+    {#if winner}
+      {#key winnerIndex}
+        <div class="banner" style:--len={Math.max(Array.from(winner).length, 4)} aria-hidden="true">
+          <div>
+            {#each Array.from(winner) as letter, i}
+              <span style:--i={i}>{letter === ' ' ? '\u00a0' : letter}</span>
+            {/each}
+          </div>
+          <div class="wins" style:--i={Array.from(winner).length + 2}>wins!</div>
+        </div>
+      {/key}
+    {/if}
   </section>
 
   <aside>
@@ -190,6 +231,15 @@
       </button>
       <button class="tool" onclick={reset} disabled={spinning || (rotation === 0 && winnerIndex === null)}>
         ↺ Reset
+      </button>
+      <button
+        class="tool"
+        onclick={toggleMuted}
+        title={muted ? 'Unmute' : 'Mute'}
+        aria-label={muted ? 'Unmute' : 'Mute'}
+        aria-pressed={muted}
+      >
+        {muted ? '🔇' : '🔊'}
       </button>
     </div>
     <textarea
@@ -224,11 +274,12 @@
 
   main {
     display: grid;
-    grid-template-columns: 1fr 340px;
+    grid-template-columns: 1fr 360px;
     height: 100vh;
   }
 
   .stage {
+    container-type: size;
     position: relative;
     display: grid;
     place-items: center;
@@ -324,6 +375,70 @@
   button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  /* Nom du gagnant en grand par-dessus la roue : s'efface tout seul au bout de 5 s. */
+  .banner {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    line-height: 1.05;
+    pointer-events: none;
+    font-size: min(24cqh, calc(125cqw / var(--len)));
+    font-weight: 900;
+    white-space: nowrap;
+    animation: banner-out 0.7s ease-in 5s forwards;
+  }
+
+  .banner span,
+  .banner .wins {
+    display: inline-block;
+    color: hsl(calc(45 + var(--i) * 37) 100% 68%);
+    -webkit-text-stroke: 0.09em #11141a;
+    paint-order: stroke fill;
+    text-shadow:
+      0 0.05em 0 #11141a,
+      0 0 0.35em rgb(255 183 3 / 0.9);
+    animation:
+      letter-in 0.65s cubic-bezier(0.2, 1.7, 0.4, 1) both,
+      letter-wave 1.1s ease-in-out infinite;
+    animation-delay:
+      calc(var(--i) * 70ms),
+      calc(var(--i) * 70ms + 0.65s);
+  }
+
+  .banner .wins {
+    font-size: 0.5em;
+    color: #fff;
+  }
+
+  @keyframes letter-in {
+    from {
+      opacity: 0;
+      transform: translateY(-1em) scale(0.1) rotate(-30deg);
+    }
+  }
+
+  @keyframes letter-wave {
+    50% {
+      transform: translateY(-0.14em) rotate(3deg);
+    }
+  }
+
+  @keyframes banner-out {
+    to {
+      opacity: 0;
+      transform: scale(1.6);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .banner span,
+    .banner .wins {
+      animation: none;
+    }
   }
 
   .force {
