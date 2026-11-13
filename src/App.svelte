@@ -53,6 +53,7 @@
     } catch {}
   }
 
+  let panelOpen = $state(false) // panneau des participants, sur mobile uniquement
   let force = $state(null) // force du dernier lancer, entre 0 et 1
   let effects
   let rim = $state()
@@ -98,6 +99,7 @@
     if (spinning || names.length === 0) return
     spinning = true
     winnerIndex = null
+    panelOpen = false // sur mobile, on referme le panneau pour voir la roue
 
     const current = randomSpin()
     force = current.force
@@ -224,9 +226,24 @@
         </div>
       {/key}
     {/if}
+    <button class="spin-fab" onclick={spin} disabled={spinning || names.length === 0}>
+      {spinning ? 'Spinning…' : 'Spin the wheel'}
+    </button>
   </section>
 
-  <aside>
+  <button
+    class="panel-toggle"
+    onclick={() => (panelOpen = !panelOpen)}
+    aria-label={panelOpen ? 'Hide participants' : 'Show participants'}
+    aria-expanded={panelOpen}
+  >
+    {panelOpen ? '✕' : '☰'}
+  </button>
+  {#if panelOpen}
+    <button class="backdrop" onclick={() => (panelOpen = false)} aria-label="Hide participants"></button>
+  {/if}
+
+  <aside class:open={panelOpen}>
     <div class="toolbar">
       <label for="names">Participants <span>({names.length})</span></label>
       <button class="tool" onclick={shuffle} disabled={spinning || names.length < 2}>
@@ -485,10 +502,83 @@
     overflow-wrap: anywhere;
   }
 
+  /* Réservés au mobile */
+  .spin-fab,
+  .panel-toggle,
+  .backdrop {
+    display: none;
+  }
+
+  /* Mobile : la roue prend tout l'écran, le panneau devient un tiroir masqué par défaut. */
   @media (max-width: 720px) {
     main {
       grid-template-columns: 1fr;
-      grid-template-rows: 55vh 1fr;
+      height: 100dvh;
+    }
+
+    .stage {
+      padding-bottom: 88px;
+    }
+
+    svg {
+      /* hauteur de l'écran moins les marges de .stage (16px en haut, 88px en bas) */
+      height: calc(100dvh - 104px);
+      max-height: none;
+    }
+
+    .spin-fab {
+      display: block;
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 16px;
+    }
+
+    .panel-toggle {
+      display: block;
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 3;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid #343a48;
+      background: #1a1e27;
+      color: inherit;
+    }
+
+    .backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      padding: 0;
+      border-radius: 0;
+      background: rgb(0 0 0 / 0.55);
+    }
+
+    aside {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      width: min(360px, 88vw);
+      padding-top: 68px;
+      box-sizing: border-box;
+      transform: translateX(100%);
+      visibility: hidden;
+      transition:
+        transform 0.25s ease,
+        visibility 0s 0.25s;
+    }
+
+    aside.open {
+      transform: none;
+      visibility: visible;
+      transition: transform 0.25s ease;
+      box-shadow: -8px 0 24px rgb(0 0 0 / 0.5);
     }
   }
 </style>
