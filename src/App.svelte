@@ -5,7 +5,23 @@
   import { MAX_SPEED, indexAtPointer, randomSpin, speedAt, travelAt } from './spin.js'
 
   const R = 96 // rayon de la roue dans le viewBox (-100..100)
-  let text = $state('Alice\nBob\nChloé\nDavid\nEmma\nFarid\nGaëlle\nHugo')
+  const DEFAULT_NAMES = 'Alice\nBob\nChloé\nDavid\nEmma\nFarid\nGaëlle\nHugo'
+  const NAMES_KEY = 'participants'
+  // La liste est relue de façon synchrone avant le premier rendu (pas de flash des prénoms
+  // par défaut). Une liste vidée volontairement ('') est conservée telle quelle.
+  function initialText() {
+    try {
+      return localStorage.getItem(NAMES_KEY) ?? DEFAULT_NAMES
+    } catch {
+      return DEFAULT_NAMES // stockage indisponible (navigation privée, cookies bloqués…)
+    }
+  }
+  let text = $state(initialText())
+  $effect(() => {
+    try {
+      localStorage.setItem(NAMES_KEY, text)
+    } catch {}
+  })
   let rotation = $state(0) // degrés, sens horaire
   let spinning = $state(false)
   let winnerIndex = $state(null)
