@@ -1,8 +1,9 @@
 <script>
   import { onMount } from 'svelte'
   import { Application, Graphics, Sprite, Texture } from 'pixi.js'
+  import { reducedMotion } from './motion.js'
 
-  // `target` : l'élément SVG du bord de la roue, pour caler les effets dessus.
+  // `target`: the SVG element of the wheel rim, used to align the effects on it.
   let { target } = $props()
 
   const SPIN_EFFECTS = ['sparks', 'comets', 'warp', 'spray']
@@ -10,8 +11,8 @@
   const WAVE_POINTS = 120
 
   let host
-  let spinEffect = null // effet tiré au hasard pour le lancer en cours
-  let intensity = 0 // vitesse de la roue, entre 0 et 1
+  let spinEffect = null // effect picked at random for the current spin
+  let intensity = 0 // wheel speed, between 0 and 1
   let wheel = { cx: 0, cy: 0, r: 0 }
   let spinTime = 0
   let waveAcc = 0
@@ -21,11 +22,11 @@
   let app = null
   let glow = null
   let particles = []
-  let queue = [] // actions différées : { delay (s), run }
+  let queue = [] // deferred actions: { delay (s), run }
 
   const rand = (min, max) => min + Math.random() * (max - min)
 
-  // hsl (h en degrés, s et l entre 0 et 1) -> 0xRRGGBB
+  // hsl (h in degrees, s and l between 0 and 1) -> 0xRRGGBB
   function hsl(h, s, l) {
     const a = s * Math.min(l, 1 - l)
     const f = (n) => {
@@ -55,7 +56,7 @@
     particles.push({ sprite, age: 0, ...props })
   }
 
-  // Canon à confettis : gerbe partant de (x, y) dans la direction `angle` (radians).
+  // Confetti cannon: burst from (x, y) in the direction `angle` (radians).
   function cannon(x, y, angle, count = 110) {
     const power = Math.max(app.screen.height, 500)
     for (let i = 0; i < count; i++) {
@@ -81,7 +82,7 @@
     }
   }
 
-  // Feu d'artifice : étincelles lumineuses (blend additif) autour de (x, y).
+  // Firework: glowing sparks (additive blending) around (x, y).
   function firework(x, y, count = 90) {
     const hue = rand(0, 360)
     for (let i = 0; i < count; i++) {
@@ -101,7 +102,7 @@
         size: rand(0.25, 0.6),
       })
     }
-    // Flash central
+    // Central flash
     const flash = new Sprite(glow)
     flash.blendMode = 'add'
     flash.position.set(x, y)
@@ -116,7 +117,7 @@
     add(sprite, { kind: 'spark', vx, vy, gravity: 0, drag: 0, ...props })
   }
 
-  // Nombre de particules à émettre cette frame pour un débit donné (par seconde).
+  // Number of particles to emit this frame for a given rate (per second).
   function emitCount(rate, dt) {
     emitAcc += rate * dt
     const n = Math.floor(emitAcc)
@@ -131,7 +132,7 @@
     rings.push({ g, age: 0, life: 1.5, hue: (spinTime * 90) % 360, phase: rand(0, Math.PI * 2) })
   }
 
-  // Ondes : anneaux ondulés qui partent du centre de la roue et s'élargissent.
+  // Waves: wavy rings that start at the wheel center and expand.
   function updateRings(dt) {
     waveAcc += dt * (1 + 3 * intensity)
     if (spinEffect && ringsEnabled && waveAcc >= 1) {
@@ -167,7 +168,7 @@
   }
 
   const spinEmitters = {
-    // Étincelles de frottement au niveau du pointeur.
+    // Friction sparks at the pointer.
     sparks(dt) {
       for (let n = emitCount(260 * intensity, dt); n > 0; n--) {
         const a = rand(-0.6, 0.25)
@@ -182,8 +183,8 @@
         )
       }
     },
-    // Trois comètes qui tournent sur le bord de la roue.
-    comets(dt) {
+    // Three comets orbiting the wheel rim.
+    comets() {
       const base = spinTime * (1 + 7 * intensity)
       for (let i = 0; i < 3; i++) {
         const a = base + (i * Math.PI * 2) / 3
@@ -199,7 +200,7 @@
         }
       }
     },
-    // Hyperespace : des étoiles filent du centre vers l'extérieur.
+    // Hyperspace: stars streak from the center outwards.
     warp(dt) {
       for (let n = emitCount(20 + 170 * intensity, dt); n > 0; n--) {
         const a = rand(0, Math.PI * 2)
@@ -215,7 +216,7 @@
         )
       }
     },
-    // Gerbe arc-en-ciel projetée par la force centrifuge.
+    // Rainbow spray flung out by centrifugal force.
     spray(dt) {
       for (let n = emitCount(10 + 220 * intensity, dt); n > 0; n--) {
         const a = rand(0, Math.PI * 2)
@@ -233,9 +234,7 @@
     },
   }
 
-  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
-
-  // À appeler au lancement de la roue : tire un effet au hasard.
+  // Call when the wheel is launched: picks a random effect.
   export function spinStart({ rings: withRings = true } = {}) {
     ringsEnabled = withRings
     if (!app || !target || reducedMotion()) return
@@ -245,12 +244,12 @@
     spinEffect = SPIN_EFFECTS[Math.floor(Math.random() * SPIN_EFFECTS.length)]
     intensity = 1
     spinTime = 0
-    waveAcc = 1 // première onde immédiate
+    waveAcc = 1 // first ring right away
     emitAcc = 0
     app.ticker.start()
   }
 
-  // À appeler à chaque frame pendant que la roue tourne (ratio entre 0 et 1).
+  // Call every frame while the wheel is spinning (ratio between 0 and 1).
   export function spinSpeed(ratio) {
     intensity = Math.max(0, Math.min(1, ratio))
   }
@@ -301,7 +300,7 @@
     })
 
     if (!spinEffect && particles.length === 0 && queue.length === 0 && rings.length === 0) {
-      app.render() // efface la dernière image avant de mettre le rendu en pause
+      app.render() // clear the last frame before pausing rendering
       app.ticker.stop()
     }
   }
@@ -341,11 +340,15 @@
           pixi.destroy(true, { children: true })
           return
         }
+        // PixiJS owns its canvas; `host` is an empty element Svelte never touches.
+        // eslint-disable-next-line svelte/no-dom-manipulating
         host.appendChild(pixi.canvas)
         glow = makeGlowTexture()
         pixi.ticker.add(tick)
         app = pixi
       })
+      // No usable renderer: the wheel still works, just without effects.
+      .catch((error) => console.warn('Effects disabled:', error))
 
     return () => {
       destroyed = true

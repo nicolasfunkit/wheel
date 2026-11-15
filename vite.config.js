@@ -3,7 +3,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: '/wheel/', // GitHub Pages : https://nicolasfunkit.github.io/wheel/
+  base: '/wheel/', // GitHub Pages: https://nicolasfunkit.github.io/wheel/
   plugins: [
     svelte(),
     VitePWA({

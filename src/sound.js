@@ -1,4 +1,4 @@
-// Sons synthétisés avec la Web Audio API (aucun fichier audio).
+// Sounds synthesized with the Web Audio API (no audio files).
 
 let ctx = null
 let master = null
@@ -34,7 +34,7 @@ function noiseBuffer(ac) {
   return noise
 }
 
-// Enveloppe de volume : monte en `attack` secondes puis s'éteint à `end`.
+// Volume envelope: rises over `attack` seconds, then fades out at `end`.
 function envelope(ac, start, peak, attack, end) {
   const gain = ac.createGain()
   gain.gain.setValueAtTime(0.0001, start)
@@ -44,7 +44,7 @@ function envelope(ac, start, peak, attack, end) {
   return gain
 }
 
-// « Clac » du pointeur quand une séparation entre deux segments passe dessous.
+// Pointer "click" when a boundary between two slices passes under it.
 export function tick() {
   const ac = audio()
   if (!ac || ac.currentTime - lastTick < 0.028) return
@@ -59,7 +59,7 @@ export function tick() {
   osc.stop(now + 0.06)
 }
 
-// Souffle au moment du lancer.
+// Whoosh when the wheel is launched.
 export function whoosh() {
   const ac = audio()
   if (!ac) return
@@ -77,7 +77,7 @@ export function whoosh() {
   src.stop(now + 0.75)
 }
 
-// Un accord de « cuivres » : dents de scie légèrement désaccordées, filtre qui s'ouvre à l'attaque.
+// A "brass" chord: slightly detuned sawtooth waves, with a filter that opens on the attack.
 function brass(ac, start, duration, freqs, level) {
   const filter = ac.createBiquadFilter()
   filter.type = 'lowpass'
@@ -100,15 +100,15 @@ function brass(ac, start, duration, freqs, level) {
   }
 }
 
-// « Ta-daa ! » : un accord bref, puis un accord tenu plus haut avec un coup de cymbale.
+// "Ta-daa!": a short chord, then a higher sustained chord with a cymbal crash.
 export function tada() {
   const ac = audio()
   if (!ac) return
   const now = ac.currentTime
   const daa = now + 0.17
 
-  brass(ac, now, 0.15, [196, 246.94, 293.66, 392], 0.16) // « ta » : sol majeur
-  brass(ac, daa, 1.5, [261.63, 329.63, 392, 523.25, 659.25], 0.18) // « daa » : do majeur
+  brass(ac, now, 0.15, [196, 246.94, 293.66, 392], 0.16) // "ta": G major
+  brass(ac, daa, 1.5, [261.63, 329.63, 392, 523.25, 659.25], 0.18) // "daa": C major
 
   const cymbal = ac.createBufferSource()
   cymbal.buffer = noiseBuffer(ac)
